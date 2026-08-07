@@ -2,8 +2,8 @@ import MainLayout from "@/layouts/MainLayout";
 
 export default function Reports() {
   return (
-    <MainLayout>
-      <h1 className="text-3xl font-bold">Contacts</h1>
-    </MainLayout>
+    
+      <h1 className="text-3xl font-bold">Reports</h1>
+    
   );
 }

@@ -1,10 +1,13 @@
 from fastapi import APIRouter, UploadFile, File, Depends
 from sqlalchemy.orm import Session
-
+from app.models.contact import Contact
 from app.core.database import get_db
 from app.services.excel_service import load_excel
 from app.services.validation_service import validate_contacts
 from app.services.contact_service import import_contacts
+
+
+
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
@@ -39,3 +42,16 @@ async def import_excel(
         **result,
         "validation_errors": errors
     }
+@router.get("/")
+async def get_contacts(db: Session = Depends(get_db)):
+    contacts = db.query(Contact).all()
+
+    return [
+        {
+            "id": contact.id,
+            "email": contact.email
+        }
+        for contact in contacts
+    ]
+
+
