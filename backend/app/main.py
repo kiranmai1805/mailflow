@@ -1,18 +1,14 @@
 from fastapi import FastAPI
 
-app = FastAPI(
-    title="MailFlow API",
-    version="1.0.0"
-)
+from app.core.database import Base, engine
 
-@app.get("/")
-def home():
-    return {
-        "message": "Welcome to MailFlow API "
-    }
+# IMPORTANT: import the model
+from app.models.contact import Contact
 
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy"
-    }
+from app.api.contacts import router as contacts_router
+
+app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
+
+app.include_router(contacts_router)
