@@ -3,6 +3,7 @@ import base64
 
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 
 def send_email(
@@ -24,6 +25,10 @@ def send_email(
             "https://www.googleapis.com/auth/gmail.send"
         ],
     )
+
+    # Automatically refresh the access token if it has expired
+    if credentials.expired and credentials.refresh_token:
+        credentials.refresh(Request())
 
     gmail = build(
         "gmail",

@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users,
   Mail,
+  AtSign,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -9,19 +10,44 @@ import {
 import { NavLink } from "react-router-dom";
 
 const menu = [
-  { name: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { name: "Contacts", icon: Users, path: "/contacts" },
-  { name: "Campaigns", icon: Mail, path: "/campaigns" },
-  { name: "Reports", icon: BarChart3, path: "/reports" },
-  { name: "Settings", icon: Settings, path: "/settings" },
+  {
+    name: "Dashboard",
+    icon: LayoutDashboard,
+    path: "/",
+  },
+  {
+    name: "Contacts",
+    icon: Users,
+    path: "/contacts",
+  },
+  {
+    name: "Campaigns",
+    icon: Mail,
+    path: "/campaigns",
+  },
+  {
+    name: "Email Accounts",
+    icon: AtSign,
+    path: "/email-accounts",
+  },
+  {
+    name: "Reports",
+    icon: BarChart3,
+    path: "/reports",
+  },
+  {
+    name: "Settings",
+    icon: Settings,
+    path: "/settings",
+  },
 ];
 
 export default function Sidebar() {
   return (
-    <aside className="w-64 bg-slate-950 text-white min-h-screen p-6">
-      <h1 className="text-2xl font-bold mb-10">
+    <aside>
+      <div className="mb-8 text-xl font-bold">
         📧 MailFlow
-      </h1>
+      </div>
 
       <nav className="space-y-2">
         {menu.map((item) => {

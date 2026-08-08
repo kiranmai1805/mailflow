@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db
 from app.models.campaign import Campaign, campaign_contacts
 from app.models.contact import Contact
+from app.models.campaign_history import CampaignHistory
 
 import os
 
@@ -12,6 +14,9 @@ from fastapi import HTTPException
 
 from app.models.google_account import GoogleAccount
 from app.services.mail_service import send_email
+
+from app.models.email_account import EmailAccount
+from app.services.smtp_service import send_smtp_email
 
 
 router = APIRouter(
@@ -25,6 +30,7 @@ class CampaignCreate(BaseModel):
     subject: str
     body: str
     contact_ids: list[int] = []
+    sender_account_id: int | None = None
 
 
 @router.post("/")
@@ -33,10 +39,11 @@ async def create_new_campaign(
     db: Session = Depends(get_db),
 ):
     new_campaign = Campaign(
-        name=campaign.name,
-        subject=campaign.subject,
-        body=campaign.body,
-    )
+    name=campaign.name,
+    subject=campaign.subject,
+    body=campaign.body,
+    sender_account_id=campaign.sender_account_id,
+)
 
     db.add(new_campaign)
     db.commit()
@@ -76,15 +83,15 @@ async def list_campaigns(
     )
 
     return [
-        {
-            "id": campaign.id,
-            "name": campaign.name,
-            "subject": campaign.subject,
-            "body": campaign.body,
-            "status": campaign.status,
-        }
-        for campaign in campaigns
-    ]
+    {
+        "id": campaign.id,
+        "name": campaign.name,
+        "subject": campaign.subject,
+        "body": campaign.body,
+        "sender_account_id": campaign.sender_account_id,
+    }
+    for campaign in campaigns
+]
 
 @router.post("/{campaign_id}/send")
 async def send_campaign(
@@ -102,15 +109,6 @@ async def send_campaign(
             status_code=404,
             detail="Campaign not found",
         )
-
-    # Don't allow the same campaign to be sent twice
-    if campaign.status == "sent":
-        return {
-            "message": "Campaign has already been sent",
-            "sent": 0,
-            "failed": 0,
-            "status": "sent",
-        }
 
     # Get contacts belonging to this campaign
     contacts = (
@@ -130,7 +128,6 @@ async def send_campaign(
             "message": "No contacts selected for this campaign",
             "sent": 0,
             "failed": 0,
-            "status": campaign.status,
         }
 
     # Get connected Google account
@@ -149,7 +146,9 @@ async def send_campaign(
     failed = 0
 
     for contact in contacts:
+
         try:
+
             send_email(
                 access_token=google_account.access_token,
                 refresh_token=google_account.refresh_token,
@@ -160,24 +159,52 @@ async def send_campaign(
                 body=campaign.body,
             )
 
+            # -----------------------------------------
+            # SAVE SUCCESSFUL SEND
+            # -----------------------------------------
+
+            history = CampaignHistory(
+                campaign_id=campaign.id,
+                contact_id=contact.id,
+                recipient_email=contact.email,
+                status="sent",
+                error=None,
+            )
+
+            db.add(history)
+
             sent += 1
 
         except Exception as error:
+
             print(
-                f"Failed to send email to {contact.email}: {error}"
+                f"Failed to send email to "
+                f"{contact.email}: {error}"
             )
+
+            # -----------------------------------------
+            # SAVE FAILED SEND
+            # -----------------------------------------
+
+            history = CampaignHistory(
+                campaign_id=campaign.id,
+                contact_id=contact.id,
+                recipient_email=contact.email,
+                status="failed",
+                error=str(error),
+            )
+
+            db.add(history)
+
             failed += 1
 
-    # Mark as sent only if all emails succeeded
-    if failed == 0 and sent > 0:
-        campaign.status = "sent"
-        db.commit()
+    # Save all history records
+    db.commit()
 
     return {
         "message": "Campaign sending completed",
         "sent": sent,
         "failed": failed,
-        "status": campaign.status,
     }
 @router.delete("/{campaign_id}")
 async def delete_campaign(
@@ -196,18 +223,115 @@ async def delete_campaign(
             detail="Campaign not found",
         )
 
-    # Remove campaign-contact associations first
+    # -------------------------------------------------
+    # 1. Delete campaign history FIRST
+    # -------------------------------------------------
+
+    db.query(CampaignHistory).filter(
+        CampaignHistory.campaign_id == campaign_id
+    ).delete(
+        synchronize_session=False
+    )
+
+    db.flush()
+
+    # -------------------------------------------------
+    # 2. Delete campaign-recipient relationships
+    # -------------------------------------------------
+
     db.execute(
         campaign_contacts.delete().where(
             campaign_contacts.c.campaign_id == campaign_id
         )
     )
 
-    # Remove campaign
+    db.flush()
+
+    # -------------------------------------------------
+    # 3. Delete the campaign itself
+    # -------------------------------------------------
+
     db.delete(campaign)
+
     db.commit()
 
     return {
-        "message": "Campaign deleted successfully",
+        "message": "Campaign removed successfully",
         "id": campaign_id,
+    }
+@router.get("/history")
+async def get_campaign_history(
+    db: Session = Depends(get_db),
+):
+    history = (
+        db.query(CampaignHistory)
+        .order_by(
+            CampaignHistory.sent_at.desc()
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": item.id,
+            "campaign_id": item.campaign_id,
+            "contact_id": item.contact_id,
+            "recipient_email": item.recipient_email,
+            "status": item.status,
+            "error": item.error,
+            "sent_at": item.sent_at,
+        }
+        for item in history
+    ]
+
+@router.get("/stats")
+async def get_campaign_stats(
+    db: Session = Depends(get_db),
+):
+    total_sent = (
+        db.query(CampaignHistory)
+        .filter(
+            CampaignHistory.status == "sent"
+        )
+        .count()
+    )
+
+    total_failed = (
+        db.query(CampaignHistory)
+        .filter(
+            CampaignHistory.status == "failed"
+        )
+        .count()
+    )
+
+    total_attempted = (
+        db.query(CampaignHistory)
+        .count()
+    )
+
+    total_campaigns = (
+        db.query(Campaign)
+        .count()
+    )
+
+    total_contacts = (
+        db.query(Contact)
+        .count()
+    )
+
+    success_rate = 0
+
+    if total_attempted > 0:
+        success_rate = round(
+            (total_sent / total_attempted) * 100,
+            2,
+        )
+
+    return {
+        "total_sent": total_sent,
+        "total_failed": total_failed,
+        "total_attempted": total_attempted,
+        "total_campaigns": total_campaigns,
+        "total_contacts": total_contacts,
+        "success_rate": success_rate,
     }

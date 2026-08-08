@@ -6,6 +6,7 @@ import Contacts from "./pages/Contacts";
 import Campaigns from "./pages/Campaigns";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import EmailAccounts from "./pages/EmailAccounts";
 
 function App() {
   return (
@@ -14,7 +15,12 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/contacts" element={<Contacts />} />
+          <Route
+  path="/email-accounts"
+  element={<EmailAccounts />}
+/>
           <Route path="/campaigns" element={<Campaigns />} />
+
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
