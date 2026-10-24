@@ -62,11 +62,14 @@ app.add_middleware(
 # CORS
 # =========================================================
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "https://mailflow-frontend-one.vercel.app",
+        "https://mailflow-frontend-dbgvzz2rg-kiranmai1805s-projects.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
