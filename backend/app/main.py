@@ -66,10 +66,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https://mailflow-frontend(-[a-z0-9]+)*-kiranmai1805s-projects\.vercel\.app",
     allow_origins=[
-        "http://localhost:5173",
         "https://mailflow-frontend-one.vercel.app",
-        "https://mailflow-frontend-dbgvzz2rg-kiranmai1805s-projects.vercel.app",
+        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
