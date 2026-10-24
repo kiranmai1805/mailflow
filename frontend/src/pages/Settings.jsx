@@ -1,269 +1,784 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import {
+  User,
+  Mail,
+  Shield,
+  Moon,
+  Sun,
+  Monitor,
+  LogOut,
+  ExternalLink,
+  Save,
+  CheckCircle,
+  Lock,
+  Eye,
+  EyeOff,
+  X,
+} from "lucide-react";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  getCurrentUser,
+  updateProfile,
+  changePassword,
+  logout,
+} from "@/services/auth";
 
-const API_URL = "http://127.0.0.1:8000";
+import { useNavigate } from "react-router-dom";
+
+import axios from "axios";
+
+
+const API_URL = "http://localhost:8000";
+
 
 export default function Settings() {
+
+  const navigate = useNavigate();
+
+
+  // =====================================================
+  // USER
+  // =====================================================
+
+  const [user, setUser] = useState(null);
+
+  const [name, setName] = useState("");
+
+  const [loading, setLoading] = useState(true);
+
+  const [saving, setSaving] = useState(false);
+
+  const [message, setMessage] = useState("");
+
+  const [error, setError] = useState("");
+
+
+  const [showPasswordForm, setShowPasswordForm] =
+  useState(false);
+
+const [currentPassword, setCurrentPassword] =
+  useState("");
+
+const [newPassword, setNewPassword] =
+  useState("");
+
+const [confirmPassword, setConfirmPassword] =
+  useState("");
+
+const [changingPassword, setChangingPassword] =
+  useState(false);
+
+const [passwordMessage, setPasswordMessage] =
+  useState("");
+
+const [passwordError, setPasswordError] =
+  useState("");
+
+const [showCurrentPassword, setShowCurrentPassword] =
+  useState(false);
+
+const [showNewPassword, setShowNewPassword] =
+  useState(false);
+
+const [showConfirmPassword, setShowConfirmPassword] =
+  useState(false);
+
+
+  // =====================================================
+  // THEME
+  // =====================================================
+
   const [theme, setTheme] = useState("light");
-  const [campaignNotifications, setCampaignNotifications] =
-    useState(true);
-  const [failureNotifications, setFailureNotifications] =
-    useState(true);
 
-  const [accounts, setAccounts] = useState([]);
-  const [defaultSender, setDefaultSender] = useState("");
 
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  // =====================================================
+  // ACCOUNT STATISTICS
+  // =====================================================
 
-  /*
-   * Load saved settings
-   */
+  const [campaignCount, setCampaignCount] =
+    useState(0);
+
+  const [contactCount, setContactCount] =
+    useState(0);
+
+  const [emailAccountCount, setEmailAccountCount] =
+    useState(0);
+
+
+  // =====================================================
+  // LOAD DATA
+  // =====================================================
+
   useEffect(() => {
-    const savedTheme =
-      localStorage.getItem("mailflow_theme") || "light";
 
-    const savedCampaignNotifications =
-      localStorage.getItem(
-        "mailflow_campaign_notifications"
-      );
+    const loadData = async () => {
 
-    const savedFailureNotifications =
-      localStorage.getItem(
-        "mailflow_failure_notifications"
-      );
-
-    const savedDefaultSender =
-      localStorage.getItem(
-        "mailflow_default_sender"
-      ) || "";
-
-    setTheme(savedTheme);
-
-    setCampaignNotifications(
-      savedCampaignNotifications === null
-        ? true
-        : savedCampaignNotifications === "true"
-    );
-
-    setFailureNotifications(
-      savedFailureNotifications === null
-        ? true
-        : savedFailureNotifications === "true"
-    );
-
-    setDefaultSender(savedDefaultSender);
-
-    applyTheme(savedTheme);
-  }, []);
-
-  /*
-   * Load connected email accounts
-   */
-  useEffect(() => {
-    const loadAccounts = async () => {
       try {
-        const response = await axios.get(
-          `${API_URL}/email-accounts/`
+
+        const [
+          userData,
+          campaignsResponse,
+          contactsResponse,
+          emailAccountsResponse,
+        ] = await Promise.all([
+          getCurrentUser(),
+
+          axios.get(
+            `${API_URL}/campaigns/`,
+            {
+              withCredentials: true,
+            }
+          ),
+
+          axios.get(
+            `${API_URL}/contacts/`,
+            {
+              withCredentials: true,
+            }
+          ),
+
+          axios.get(
+            `${API_URL}/email-accounts/`,
+            {
+              withCredentials: true,
+            }
+          ),
+        ]);
+
+
+        setUser(userData);
+
+        setName(userData.name);
+
+
+        setCampaignCount(
+          campaignsResponse.data.length
         );
 
-        setAccounts(response.data);
+        setContactCount(
+          contactsResponse.data.length
+        );
+
+        setEmailAccountCount(
+          emailAccountsResponse.data.length
+        );
+
+
+        const savedTheme =
+          localStorage.getItem(
+            "mailflow_theme"
+          );
+
+        if (savedTheme) {
+          setTheme(savedTheme);
+        } else {
+          setTheme("light");
+        }
+
       } catch (error) {
+
         console.error(
-          "Failed to load email accounts:",
+          "Failed to load settings:",
           error
         );
+
       } finally {
-        setLoadingAccounts(false);
+
+        setLoading(false);
+
       }
+
     };
 
-    loadAccounts();
+
+    loadData();
+
   }, []);
 
-  /*
-   * Apply theme
-   */
-  const applyTheme = (selectedTheme) => {
-    const root = document.documentElement;
 
-    if (selectedTheme === "dark") {
+  // =====================================================
+  // THEME CHANGE
+  // =====================================================
+
+  const changeTheme = (newTheme) => {
+
+    setTheme(newTheme);
+
+    const root =
+      document.documentElement;
+
+
+    if (newTheme === "dark") {
+
       root.classList.add("dark");
-    } else if (selectedTheme === "light") {
-      root.classList.remove("dark");
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
 
-      root.classList.toggle(
-        "dark",
-        prefersDark
+      localStorage.setItem(
+        "mailflow_theme",
+        "dark"
       );
+
+    } else if (newTheme === "light") {
+
+      root.classList.remove("dark");
+
+      localStorage.setItem(
+        "mailflow_theme",
+        "light"
+      );
+
+    } else {
+
+      localStorage.setItem(
+        "mailflow_theme",
+        "system"
+      );
+
+      const prefersDark =
+        window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+
+
+      if (prefersDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+
     }
+
   };
 
-  /*
-   * Change theme
-   */
-  const handleThemeChange = (value) => {
-    setTheme(value);
 
-    localStorage.setItem(
-      "mailflow_theme",
-      value
-    );
+  // =====================================================
+  // SAVE PROFILE
+  // =====================================================
 
-    applyTheme(value);
-  };
+  const handleSaveProfile = async () => {
 
-  /*
-   * Campaign notification
-   */
-  const handleCampaignNotifications = (value) => {
-    setCampaignNotifications(value);
+    setMessage("");
+    setError("");
 
-    localStorage.setItem(
-      "mailflow_campaign_notifications",
-      String(value)
-    );
-  };
 
-  /*
-   * Failure notification
-   */
-  const handleFailureNotifications = (value) => {
-    setFailureNotifications(value);
+    if (!name.trim()) {
 
-    localStorage.setItem(
-      "mailflow_failure_notifications",
-      String(value)
-    );
-  };
+      setError(
+        "Name cannot be empty."
+      );
 
-  /*
-   * Default sender
-   */
-  const handleDefaultSender = (value) => {
-    setDefaultSender(value);
-
-    localStorage.setItem(
-      "mailflow_default_sender",
-      value
-    );
-  };
-
-  /*
-   * Reset settings
-   */
-  const handleReset = () => {
-    const confirmed = window.confirm(
-      "Reset all MailFlow settings to their default values?"
-    );
-
-    if (!confirmed) {
       return;
+
     }
 
-    localStorage.removeItem(
-      "mailflow_theme"
-    );
 
-    localStorage.removeItem(
-      "mailflow_campaign_notifications"
-    );
+    try {
 
-    localStorage.removeItem(
-      "mailflow_failure_notifications"
-    );
+      setSaving(true);
 
-    localStorage.removeItem(
-      "mailflow_default_sender"
-    );
+      const response =
+        await updateProfile(
+          name.trim()
+        );
 
-    setTheme("light");
-    setCampaignNotifications(true);
-    setFailureNotifications(true);
-    setDefaultSender("");
 
-    applyTheme("light");
+      setUser(response.user);
+
+      setName(response.user.name);
+
+      setMessage(
+        "Profile updated successfully."
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Failed to update profile:",
+        error
+      );
+
+      setError(
+        error.response?.data?.detail ||
+          "Failed to update profile."
+      );
+
+    } finally {
+
+      setSaving(false);
+
+    }
+
   };
+
+
+  // =====================================================
+  // LOGOUT
+  // =====================================================
+
+  const handleLogout = async () => {
+
+    try {
+
+      await logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Logout failed:",
+        error
+      );
+
+    }
+
+  };
+
+const handleChangePassword = async () => {
+  setPasswordMessage("");
+  setPasswordError("");
+
+  if (!currentPassword) {
+    setPasswordError(
+      "Please enter your current password."
+    );
+    return;
+  }
+
+  if (!newPassword) {
+    setPasswordError(
+      "Please enter a new password."
+    );
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    setPasswordError(
+      "New password must be at least 8 characters long."
+    );
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    setPasswordError(
+      "New passwords do not match."
+    );
+    return;
+  }
+
+  try {
+    setChangingPassword(true);
+
+    const response = await changePassword(
+      currentPassword,
+      newPassword,
+      confirmPassword
+    );
+
+    setPasswordMessage(
+      response.message ||
+        "Password changed successfully."
+    );
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+
+    setTimeout(() => {
+      setShowPasswordForm(false);
+      setPasswordMessage("");
+    }, 2000);
+
+  } catch (error) {
+    console.error(
+      "Failed to change password:",
+      error
+    );
+
+    setPasswordError(
+      error.response?.data?.detail ||
+        "Failed to change password."
+    );
+  } finally {
+    setChangingPassword(false);
+  }
+};
+  // =====================================================
+  // LOADING
+  // =====================================================
+
+  if (loading) {
+
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+
+        <p className="text-gray-500 dark:text-gray-400">
+          Loading account settings...
+        </p>
+
+      </div>
+    );
+
+  }
+
+
+  // =====================================================
+  // INITIAL
+  // =====================================================
+
+  const initial =
+    user?.name
+      ?.charAt(0)
+      ?.toUpperCase() || "U";
+
 
   return (
-    <div className="space-y-8">
 
-      {/* =====================================================
+    <div className="mx-auto max-w-6xl space-y-8">
+
+
+      {/* =================================================
           HEADER
-      ===================================================== */}
+      ================================================= */}
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Settings
+
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Profile & Settings
         </h1>
 
-        <p className="mt-1 text-sm text-gray-500">
-          Customize your MailFlow preferences.
+        <p className="mt-2 text-gray-500 dark:text-gray-400">
+          Manage your MailFlow account,
+          preferences and connected services.
         </p>
+
       </div>
 
 
-      {/* =====================================================
-          APPEARANCE
-      ===================================================== */}
+      {/* =================================================
+          PROFILE
+      ================================================= */}
 
-      <Card>
+      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
 
-        <CardHeader>
-          <CardTitle>
-            Appearance
-          </CardTitle>
-        </CardHeader>
+        <div className="border-b border-gray-200 p-6 dark:border-slate-800">
 
-        <CardContent>
+          <div className="flex items-center gap-3">
 
-          <div>
-            <h3 className="font-medium">
-              Theme
-            </h3>
+            <div className="rounded-xl bg-blue-100 p-3 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
 
-            <p className="mt-1 text-sm text-gray-500">
-              Choose how MailFlow should look.
-            </p>
+              <User size={22} />
+
+            </div>
+
+            <div>
+
+              <h2 className="text-lg font-semibold">
+                Profile
+              </h2>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Your personal account information.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div className="p-6">
+
+
+          {/* Profile identity */}
+
+          <div className="mb-8 flex items-center gap-4">
+
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white">
+
+              {initial}
+
+            </div>
+
+
+            <div>
+
+              <h3 className="text-lg font-semibold">
+                {user?.name}
+              </h3>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {user?.email}
+              </p>
+
+            </div>
+
           </div>
 
 
-          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {/* Form */}
+
+          <div className="grid gap-6 md:grid-cols-2">
+
+
+            <div>
+
+              <label className="mb-2 block text-sm font-medium">
+                Full Name
+              </label>
+
+              <input
+                type="text"
+                value={name}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-blue-950"
+              />
+
+            </div>
+
+
+            <div>
+
+              <label className="mb-2 block text-sm font-medium">
+                Email Address
+              </label>
+
+              <div className="relative">
+
+                <Mail
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+
+                <input
+                  type="email"
+                  value={user?.email || ""}
+                  disabled
+                  className="w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-100 py-3 pl-10 pr-4 text-gray-500 dark:border-slate-800 dark:bg-slate-900 dark:text-gray-400"
+                />
+
+              </div>
+
+              <p className="mt-2 text-xs text-gray-400">
+                Email changes are currently disabled.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          {/* Messages */}
+
+          {message && (
+
+            <div className="mt-5 flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+
+              <CheckCircle size={17} />
+
+              {message}
+
+            </div>
+
+          )}
+
+
+          {error && (
+
+            <div className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
+
+              {error}
+
+            </div>
+
+          )}
+
+
+          {/* Save */}
+
+          <div className="mt-6">
+
+            <button
+              onClick={handleSaveProfile}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              <Save size={17} />
+
+              {saving
+                ? "Saving..."
+                : "Save Changes"}
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =================================================
+          ACCOUNT OVERVIEW
+      ================================================= */}
+
+      <section>
+
+        <div className="mb-4">
+
+          <h2 className="text-xl font-semibold">
+            Account Overview
+          </h2>
+
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Your MailFlow activity.
+          </p>
+
+        </div>
+
+
+        <div className="grid gap-5 md:grid-cols-3">
+
+
+          {/* Campaigns */}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+
+            <p className="text-sm text-gray-500">
+              Campaigns
+            </p>
+
+            <p className="mt-2 text-3xl font-bold">
+              {campaignCount}
+            </p>
+
+            <p className="mt-2 text-xs text-gray-400">
+              Campaigns created
+            </p>
+
+          </div>
+
+
+          {/* Contacts */}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+
+            <p className="text-sm text-gray-500">
+              Contacts
+            </p>
+
+            <p className="mt-2 text-3xl font-bold">
+              {contactCount}
+            </p>
+
+            <p className="mt-2 text-xs text-gray-400">
+              Saved recipients
+            </p>
+
+          </div>
+
+
+          {/* Email Accounts */}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+
+            <p className="text-sm text-gray-500">
+              Email Accounts
+            </p>
+
+            <p className="mt-2 text-3xl font-bold">
+              {emailAccountCount}
+            </p>
+
+            <p className="mt-2 text-xs text-gray-400">
+              Connected sender accounts
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =================================================
+          PREFERENCES
+      ================================================= */}
+
+      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+
+        <div className="border-b border-gray-200 p-6 dark:border-slate-800">
+
+          <div className="flex items-center gap-3">
+
+            <div className="rounded-xl bg-purple-100 p-3 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
+
+              {theme === "dark" ? (
+                <Moon size={22} />
+              ) : (
+                <Sun size={22} />
+              )}
+
+            </div>
+
+            <div>
+
+              <h2 className="text-lg font-semibold">
+                Preferences
+              </h2>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Customize how MailFlow looks.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div className="p-6">
+
+          <p className="mb-4 text-sm font-medium">
+            Appearance
+          </p>
+
+
+          <div className="grid gap-3 sm:grid-cols-3">
+
 
             {/* Light */}
 
             <button
               onClick={() =>
-                handleThemeChange("light")
+                changeTheme("light")
               }
-              className={`rounded-xl border p-5 text-left transition ${
+              className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
                 theme === "light"
-                  ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
-                  : "hover:bg-gray-50"
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                  : "border-gray-200 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-900"
               }`}
             >
 
-              <div className="text-3xl">
-                ☀️
+              <Sun size={20} />
+
+              <div>
+
+                <p className="font-medium">
+                  Light
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  Bright interface
+                </p>
+
               </div>
-
-              <h3 className="mt-3 font-semibold">
-                Light
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Use the light appearance.
-              </p>
 
             </button>
 
@@ -272,26 +787,28 @@ export default function Settings() {
 
             <button
               onClick={() =>
-                handleThemeChange("dark")
+                changeTheme("dark")
               }
-              className={`rounded-xl border p-5 text-left transition ${
+              className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
                 theme === "dark"
-                  ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
-                  : "hover:bg-gray-50"
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                  : "border-gray-200 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-900"
               }`}
             >
 
-              <div className="text-3xl">
-                🌙
+              <Moon size={20} />
+
+              <div>
+
+                <p className="font-medium">
+                  Dark
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  Easy on the eyes
+                </p>
+
               </div>
-
-              <h3 className="mt-3 font-semibold">
-                Dark
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Use the dark appearance.
-              </p>
 
             </button>
 
@@ -300,244 +817,427 @@ export default function Settings() {
 
             <button
               onClick={() =>
-                handleThemeChange("system")
+                changeTheme("system")
               }
-              className={`rounded-xl border p-5 text-left transition ${
+              className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${
                 theme === "system"
-                  ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
-                  : "hover:bg-gray-50"
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                  : "border-gray-200 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-900"
               }`}
             >
 
-              <div className="text-3xl">
-                💻
-              </div>
+              <Monitor size={20} />
 
-              <h3 className="mt-3 font-semibold">
-                System
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Follow your device preference.
-              </p>
-
-            </button>
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-      {/* =====================================================
-          NOTIFICATIONS
-      ===================================================== */}
-
-      <Card>
-
-        <CardHeader>
-          <CardTitle>
-            Notifications
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-5">
-
-          {/* Campaign sent */}
-
-          <label className="flex cursor-pointer items-center justify-between gap-5">
-
-            <div>
-
-              <h3 className="font-medium">
-                Campaign sent
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Show a notification when a campaign
-                finishes sending.
-              </p>
-
-            </div>
-
-            <input
-              type="checkbox"
-              checked={campaignNotifications}
-              onChange={(e) =>
-                handleCampaignNotifications(
-                  e.target.checked
-                )
-              }
-              className="h-5 w-5"
-            />
-
-          </label>
-
-
-          <div className="border-t" />
-
-
-          {/* Failed emails */}
-
-          <label className="flex cursor-pointer items-center justify-between gap-5">
-
-            <div>
-
-              <h3 className="font-medium">
-                Failed emails
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Show a notification when one or more
-                emails fail to send.
-              </p>
-
-            </div>
-
-            <input
-              type="checkbox"
-              checked={failureNotifications}
-              onChange={(e) =>
-                handleFailureNotifications(
-                  e.target.checked
-                )
-              }
-              className="h-5 w-5"
-            />
-
-          </label>
-
-        </CardContent>
-
-      </Card>
-
-
-      {/* =====================================================
-          SENDING
-      ===================================================== */}
-
-      <Card>
-
-        <CardHeader>
-          <CardTitle>
-            Sending Preferences
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-
-          <div>
-
-            <label className="mb-2 block font-medium">
-              Default Sender
-            </label>
-
-            <p className="mb-3 text-sm text-gray-500">
-              This account can be selected as your
-              preferred sender when creating campaigns.
-            </p>
-
-            {loadingAccounts ? (
-
-              <p className="text-sm text-gray-500">
-                Loading email accounts...
-              </p>
-
-            ) : accounts.length === 0 ? (
-
-              <div className="rounded-lg border border-dashed p-5">
+              <div>
 
                 <p className="font-medium">
-                  No email accounts connected.
+                  System
                 </p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Connect an email account before
-                  selecting a default sender.
+                <p className="text-xs text-gray-500">
+                  Follow device theme
                 </p>
 
               </div>
 
-            ) : (
-
-              <select
-                value={defaultSender}
-                onChange={(e) =>
-                  handleDefaultSender(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-lg border p-3 outline-none focus:border-blue-500 md:max-w-lg"
-              >
-
-                <option value="">
-                  No default sender
-                </option>
-
-                {accounts.map((account) => (
-                  <option
-                    key={account.id}
-                    value={account.id}
-                  >
-                    {account.email} (
-                    {account.provider})
-                  </option>
-                ))}
-
-              </select>
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-      {/* =====================================================
-          RESET
-      ===================================================== */}
-
-      <Card>
-
-        <CardHeader>
-          <CardTitle>
-            Preferences
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-            <div>
-
-              <h3 className="font-medium">
-                Reset Settings
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Restore MailFlow settings to their
-                default values.
-              </p>
-
-            </div>
-
-            <button
-              onClick={handleReset}
-              className="rounded-lg border border-red-300 px-5 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
-            >
-              Reset Settings
             </button>
 
           </div>
 
-        </CardContent>
+        </div>
 
-      </Card>
+      </section>
+
+
+      {/* =================================================
+          SECURITY
+      ================================================= */}
+
+      {/* =================================================
+    SECURITY
+================================================= */}
+
+<section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+
+  <div className="flex items-center justify-between p-6">
+
+    <div className="flex items-center gap-3">
+
+      <div className="rounded-xl bg-green-100 p-3 text-green-600 dark:bg-green-950/50 dark:text-green-400">
+
+        <Shield size={22} />
+
+      </div>
+
+      <div>
+
+        <h2 className="text-lg font-semibold">
+          Security
+        </h2>
+
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Manage your account security.
+        </p>
+
+      </div>
 
     </div>
+
+
+    {!showPasswordForm && (
+      <button
+        onClick={() => {
+          setShowPasswordForm(true);
+          setPasswordError("");
+          setPasswordMessage("");
+        }}
+        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-800"
+      >
+        Change Password
+      </button>
+    )}
+
+  </div>
+
+
+  {!showPasswordForm ? (
+
+    <div className="border-t border-gray-200 px-6 py-4 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400">
+
+      Keep your MailFlow account secure by using
+      a strong password.
+
+    </div>
+
+  ) : (
+
+    <div className="border-t border-gray-200 p-6 dark:border-slate-800">
+
+      <div className="max-w-xl space-y-5">
+
+
+        {/* Current Password */}
+
+        <div>
+
+          <label className="mb-2 block text-sm font-medium">
+            Current Password
+          </label>
+
+          <div className="relative">
+
+            <Lock
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+
+            <input
+              type={
+                showCurrentPassword
+                  ? "text"
+                  : "password"
+              }
+              value={currentPassword}
+              onChange={(e) =>
+                setCurrentPassword(
+                  e.target.value
+                )
+              }
+              placeholder="Enter current password"
+              className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-12 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-blue-950"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowCurrentPassword(
+                  (value) => !value
+                )
+              }
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              {showCurrentPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}
+            </button>
+
+          </div>
+
+        </div>
+
+
+        {/* New Password */}
+
+        <div>
+
+          <label className="mb-2 block text-sm font-medium">
+            New Password
+          </label>
+
+          <div className="relative">
+
+            <Lock
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+
+            <input
+              type={
+                showNewPassword
+                  ? "text"
+                  : "password"
+              }
+              value={newPassword}
+              onChange={(e) =>
+                setNewPassword(
+                  e.target.value
+                )
+              }
+              placeholder="Enter new password"
+              className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-12 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-blue-950"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowNewPassword(
+                  (value) => !value
+                )
+              }
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              {showNewPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}
+            </button>
+
+          </div>
+
+          <p className="mt-2 text-xs text-gray-400">
+            Password must contain at least 8 characters.
+          </p>
+
+        </div>
+
+
+        {/* Confirm Password */}
+
+        <div>
+
+          <label className="mb-2 block text-sm font-medium">
+            Confirm New Password
+          </label>
+
+          <div className="relative">
+
+            <Lock
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+
+            <input
+              type={
+                showConfirmPassword
+                  ? "text"
+                  : "password"
+              }
+              value={confirmPassword}
+              onChange={(e) =>
+                setConfirmPassword(
+                  e.target.value
+                )
+              }
+              placeholder="Confirm new password"
+              className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-12 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-blue-950"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowConfirmPassword(
+                  (value) => !value
+                )
+              }
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              {showConfirmPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}
+            </button>
+
+          </div>
+
+        </div>
+
+
+        {/* Success */}
+
+        {passwordMessage && (
+
+          <div className="flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+
+            <CheckCircle size={17} />
+
+            {passwordMessage}
+
+          </div>
+
+        )}
+
+
+        {/* Error */}
+
+        {passwordError && (
+
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
+
+            {passwordError}
+
+          </div>
+
+        )}
+
+
+        {/* Buttons */}
+
+        <div className="flex gap-3">
+
+          <button
+            onClick={handleChangePassword}
+            disabled={changingPassword}
+            className="rounded-lg bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+
+            {changingPassword
+              ? "Changing Password..."
+              : "Change Password"}
+
+          </button>
+
+
+          <button
+            onClick={() => {
+              setShowPasswordForm(false);
+
+              setCurrentPassword("");
+              setNewPassword("");
+              setConfirmPassword("");
+
+              setPasswordError("");
+              setPasswordMessage("");
+            }}
+            disabled={changingPassword}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-5 py-3 font-medium transition hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+
+            <X size={17} />
+
+            Cancel
+
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  )}
+
+</section>
+
+      {/* =================================================
+          EMAIL ACCOUNTS
+      ================================================= */}
+
+      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+
+        <div className="flex items-center justify-between p-6">
+
+          <div className="flex items-center gap-3">
+
+            <div className="rounded-xl bg-orange-100 p-3 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
+
+              <Mail size={22} />
+
+            </div>
+
+            <div>
+
+              <h2 className="text-lg font-semibold">
+                Email Accounts
+              </h2>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Manage the accounts used to send campaigns.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <button
+            onClick={() =>
+              navigate("/email-accounts")
+            }
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+
+            Manage
+
+            <ExternalLink size={15} />
+
+          </button>
+
+        </div>
+
+      </section>
+
+
+      {/* =================================================
+          ACCOUNT
+      ================================================= */}
+
+      <section className="rounded-2xl border border-red-200 bg-white shadow-sm dark:border-red-950 dark:bg-slate-950">
+
+        <div className="p-6">
+
+          <h2 className="text-lg font-semibold text-red-600 dark:text-red-400">
+            Account
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Manage your MailFlow session.
+          </p>
+
+
+          <div className="mt-5">
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-3 font-medium text-white transition hover:bg-red-700"
+            >
+
+              <LogOut size={17} />
+
+              Sign out of MailFlow
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+
   );
 }
