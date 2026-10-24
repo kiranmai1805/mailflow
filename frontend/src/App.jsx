@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -20,74 +21,28 @@ import Signup from "./pages/Signup";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
-
 function App() {
   return (
     <BrowserRouter>
-
       <Routes>
+        {/* Public routes - no login required */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
 
-        {/* =================================================
-            PUBLIC ROUTES
-        ================================================= */}
-
-        <Route
-          path="/login"
-          element={<Login />}
-        />
-
-        <Route
-          path="/signup"
-          element={<Signup />}
-        />
-
-
-        {/* =================================================
-            PROTECTED ROUTES
-        ================================================= */}
-
+        {/* Protected routes - login required */}
         <Route element={<ProtectedRoute />}>
-
           <Route element={<MainLayout />}>
-
-            <Route
-              path="/"
-              element={<Dashboard />}
-            />
-
-            <Route
-              path="/contacts"
-              element={<Contacts />}
-            />
-
-            <Route
-              path="/email-accounts"
-              element={<EmailAccounts />}
-            />
-
-            <Route
-              path="/campaigns"
-              element={<Campaigns />}
-            />
-
-            <Route
-              path="/reports"
-              element={<Reports />}
-            />
-
-            <Route
-              path="/settings"
-              element={<Settings />}
-            />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/email-accounts" element={<EmailAccounts />} />
+            <Route path="/campaigns" element={<Campaigns />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
-
         </Route>
-
       </Routes>
-
     </BrowserRouter>
   );
 }
