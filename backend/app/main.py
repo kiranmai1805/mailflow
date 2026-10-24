@@ -51,8 +51,11 @@ if not session_secret:
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=session_secret,
+    secret_key=os.getenv("SESSION_SECRET"),
+    same_site="none",
+    https_only=True,
 )
+
 
 
 # =========================================================
