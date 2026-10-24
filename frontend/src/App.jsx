@@ -12,6 +12,7 @@ import Campaigns from "./pages/Campaigns";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import EmailAccounts from "./pages/EmailAccounts";
+import Privacy from "./pages/Privacy";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -77,6 +78,7 @@ function App() {
               path="/settings"
               element={<Settings />}
             />
+            <Route path="/privacy" element={<Privacy />} />
 
           </Route>
 
