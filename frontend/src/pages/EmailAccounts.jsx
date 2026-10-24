@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "http://mailflow-gh75.onrender.com";
 
 export default function EmailAccounts() {
   const [accounts, setAccounts] = useState([]);

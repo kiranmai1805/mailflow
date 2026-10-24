@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "http://mailflow-gh75.onrender.com";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
