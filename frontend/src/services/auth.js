@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8000";
+const API_URL = "https://mailflow-gh75.onrender.com";
+
+
 
 const authApi = axios.create({
   baseURL: API_URL,

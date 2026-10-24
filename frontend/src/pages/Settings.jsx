@@ -28,7 +28,9 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 
-const API_URL = "http://localhost:8000";
+const API_URL = "https://mailflow-gh75.onrender.com";
+
+
 
 
 export default function Settings() {
