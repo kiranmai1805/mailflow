@@ -13,6 +13,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import EmailAccounts from "./pages/EmailAccounts";
 import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -79,6 +80,7 @@ function App() {
               element={<Settings />}
             />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
 
           </Route>
 
