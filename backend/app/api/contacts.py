@@ -1,9 +1,20 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    UploadFile,
+    File,
+    Depends,
+    HTTPException,
+)
 from sqlalchemy.orm import Session
 
 from app.models.contact import Contact
 from app.models.campaign import campaign_contacts
+
+from app.models.user import User
+
 from app.core.database import get_db
+
+from app.api.dependencies import get_current_user
 
 from app.services.excel_service import load_excel
 from app.services.validation_service import validate_contacts
@@ -22,7 +33,7 @@ router = APIRouter(
 
 @router.post("/preview")
 async def preview_contacts(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
 ):
     df = load_excel(file.file)
 
@@ -45,28 +56,76 @@ async def preview_contacts(
 async def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     df = load_excel(file.file)
 
     valid, errors = validate_contacts(df)
 
-    result = import_contacts(db, valid)
+    imported = 0
+    skipped = 0
+
+    for item in valid:
+
+        email = (
+            item.get("email")
+            if isinstance(item, dict)
+            else None
+        )
+
+        if not email:
+            skipped += 1
+            continue
+
+        email = email.strip().lower()
+
+        existing = (
+            db.query(Contact)
+            .filter(
+                Contact.email == email,
+                Contact.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if existing:
+            skipped += 1
+            continue
+
+        contact = Contact(
+            email=email,
+            user_id=current_user.id,
+        )
+
+        db.add(contact)
+        imported += 1
+
+    db.commit()
 
     return {
-        **result,
+        "imported": imported,
+        "skipped": skipped,
         "validation_errors": errors,
     }
 
 
 # =========================================================
-# GET ALL CONTACTS
+# GET CURRENT USER CONTACTS
 # =========================================================
 
 @router.get("/")
 async def get_contacts(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    contacts = db.query(Contact).all()
+    contacts = (
+        db.query(Contact)
+        .filter(
+            Contact.user_id == current_user.id
+        )
+        .order_by(Contact.id.desc())
+        .all()
+    )
 
     return [
         {
@@ -85,10 +144,14 @@ async def get_contacts(
 async def delete_contact(
     contact_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     contact = (
         db.query(Contact)
-        .filter(Contact.id == contact_id)
+        .filter(
+            Contact.id == contact_id,
+            Contact.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -100,15 +163,23 @@ async def delete_contact(
 
     email = contact.email
 
-    # Remove the contact from campaign-recipient
-    # relationships first.
+    # Remove campaign-recipient relationships
     db.execute(
         campaign_contacts.delete().where(
-            campaign_contacts.c.contact_id == contact_id
+            campaign_contacts.c.contact_id
+            == contact_id
         )
     )
 
-    # Remove the actual contact.
+    # Remove campaign history
+    from app.models.campaign_history import CampaignHistory
+
+    db.query(CampaignHistory).filter(
+        CampaignHistory.contact_id == contact_id
+    ).delete(
+        synchronize_session=False
+    )
+
     db.delete(contact)
 
     db.commit()

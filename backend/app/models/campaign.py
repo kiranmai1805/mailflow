@@ -15,12 +15,14 @@ from app.core.database import Base
 campaign_contacts = Table(
     "campaign_contacts",
     Base.metadata,
+
     Column(
         "campaign_id",
         Integer,
         ForeignKey("campaigns.id"),
         primary_key=True,
     ),
+
     Column(
         "contact_id",
         Integer,
@@ -33,17 +35,38 @@ campaign_contacts = Table(
 class Campaign(Base):
     __tablename__ = "campaigns"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
-    name = Column(String, nullable=False)
-    subject = Column(String, nullable=False)
-    body = Column(Text, nullable=False)
+    name = Column(
+        String,
+        nullable=False,
+    )
 
-    # Email account used to send this campaign
+    subject = Column(
+        String,
+        nullable=False,
+    )
+
+    body = Column(
+        Text,
+        nullable=False,
+    )
+
     sender_account_id = Column(
         Integer,
         ForeignKey("email_accounts.id"),
         nullable=True,
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
     )
 
     created_at = Column(

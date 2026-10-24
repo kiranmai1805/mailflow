@@ -32,6 +32,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ProfileUpdateRequest(BaseModel):
+    name: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
 # =========================================================
 # SIGN UP
 # =========================================================
@@ -42,10 +50,9 @@ async def signup(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    # Check if email already exists
     existing_user = (
         db.query(User)
-        .filter(User.email == data.email)
+        .filter(User.email == data.email.lower())
         .first()
     )
 
@@ -55,19 +62,16 @@ async def signup(
             detail="An account with this email already exists.",
         )
 
-    # Basic password validation
     if len(data.password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Password must be at least 8 characters long.",
         )
 
-    # Hash password
     hashed_password = password_hash.hash(
         data.password
     )
 
-    # Create user
     new_user = User(
         name=data.name.strip(),
         email=data.email.lower(),
@@ -78,7 +82,6 @@ async def signup(
     db.commit()
     db.refresh(new_user)
 
-    # Automatically sign the user in
     request.session["user_id"] = new_user.id
 
     return {
@@ -115,7 +118,6 @@ async def login(
             detail="Invalid email or password.",
         )
 
-    # Verify password
     if not password_hash.verify(
         data.password,
         user.password_hash,
@@ -125,7 +127,6 @@ async def login(
             detail="Invalid email or password.",
         )
 
-    # Create session
     request.session["user_id"] = user.id
 
     return {
@@ -173,12 +174,146 @@ async def get_current_user(
         "id": user.id,
         "name": user.name,
         "email": user.email,
+        "created_at": user.created_at,
+    }
+
+
+# =========================================================
+# UPDATE PROFILE
+# =========================================================
+
+@router.put("/profile")
+async def update_profile(
+    data: ProfileUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated.",
+        )
+
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User account not found.",
+        )
+
+    name = data.name.strip()
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Name cannot be empty.",
+        )
+
+    if len(name) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Name is too long.",
+        )
+
+    user.name = name
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Profile updated successfully",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+        },
     }
 
 
 # =========================================================
 # LOGOUT
 # =========================================================
+# =========================================================
+# CHANGE PASSWORD
+# =========================================================
+
+@router.put("/password")
+async def change_password(
+    data: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated.",
+        )
+
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User account not found.",
+        )
+
+    # Check current password
+    if not password_hash.verify(
+        data.current_password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect.",
+        )
+
+    # Validate new password
+    if len(data.new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be at least 8 characters long.",
+        )
+
+    # Confirm password
+    if data.new_password != data.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="New passwords do not match.",
+        )
+
+    # Don't allow same password
+    if password_hash.verify(
+        data.new_password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from your current password.",
+        )
+
+    # Hash new password
+    user.password_hash = password_hash.hash(
+        data.new_password
+    )
+
+    db.commit()
+
+    return {
+        "message": "Password changed successfully."
+    }
 
 @router.post("/logout")
 async def logout(

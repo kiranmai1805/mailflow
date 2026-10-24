@@ -1,8 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+)
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.api.dependencies import get_current_user
+
+from app.models.user import User
 from app.models.email_account import EmailAccount
 
 from app.services.smtp_service import send_smtp_email
@@ -32,10 +39,14 @@ class EmailAccountCreate(BaseModel):
 async def create_email_account(
     account: EmailAccountCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     existing = (
         db.query(EmailAccount)
-        .filter(EmailAccount.email == account.email)
+        .filter(
+            EmailAccount.email == account.email,
+            EmailAccount.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -53,6 +64,7 @@ async def create_email_account(
         username=account.username,
         password=account.password,
         use_tls=account.use_tls,
+        user_id=current_user.id,
     )
 
     db.add(new_account)
@@ -74,10 +86,16 @@ async def create_email_account(
 @router.get("/")
 async def list_email_accounts(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     accounts = (
         db.query(EmailAccount)
-        .order_by(EmailAccount.id.desc())
+        .filter(
+            EmailAccount.user_id == current_user.id
+        )
+        .order_by(
+            EmailAccount.id.desc()
+        )
         .all()
     )
 
@@ -103,10 +121,14 @@ async def test_email_account(
     account_id: int,
     recipient: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     account = (
         db.query(EmailAccount)
-        .filter(EmailAccount.id == account_id)
+        .filter(
+            EmailAccount.id == account_id,
+            EmailAccount.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -124,14 +146,20 @@ async def test_email_account(
             password=account.password,
             recipient=recipient,
             subject="MailFlow SMTP Test",
-            body="This is a test email sent from MailFlow using SMTP.",
+            body=(
+                "This is a test email sent from "
+                "MailFlow using SMTP."
+            ),
             use_tls=account.use_tls,
         )
 
         return result
 
     except Exception as error:
-        print(f"SMTP test failed: {error}")
+
+        print(
+            f"SMTP test failed: {error}"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -140,17 +168,21 @@ async def test_email_account(
 
 
 # =========================================================
-# DELETE / REMOVE EMAIL ACCOUNT
+# DELETE EMAIL ACCOUNT
 # =========================================================
 
 @router.delete("/{account_id}")
 async def delete_email_account(
     account_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     account = (
         db.query(EmailAccount)
-        .filter(EmailAccount.id == account_id)
+        .filter(
+            EmailAccount.id == account_id,
+            EmailAccount.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -168,27 +200,4 @@ async def delete_email_account(
     return {
         "message": "Email account removed successfully",
         "email": email,
-    }
-@router.delete("/{account_id}")
-async def delete_email_account(
-    account_id: int,
-    db: Session = Depends(get_db),
-):
-    account = (
-        db.query(EmailAccount)
-        .filter(EmailAccount.id == account_id)
-        .first()
-    )
-
-    if not account:
-        raise HTTPException(
-            status_code=404,
-            detail="Email account not found",
-        )
-
-    db.delete(account)
-    db.commit()
-
-    return {
-        "message": "Email account removed successfully"
     }
