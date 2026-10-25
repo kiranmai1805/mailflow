@@ -57,10 +57,9 @@ class Campaign(Base):
     )
 
     sender_account_id = Column(
-        Integer,
-        ForeignKey("email_accounts.id"),
-        nullable=True,
-    )
+    Integer,
+    nullable=True,
+)
 
     user_id = Column(
         Integer,
@@ -72,4 +71,11 @@ class Campaign(Base):
     created_at = Column(
         DateTime,
         default=datetime.utcnow,
+    )
+
+    
+    sender_account_type = Column(
+        String,
+        nullable=False,
+        default="google",
     )

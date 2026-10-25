@@ -14,6 +14,7 @@ from app.models.google_account import GoogleAccount
 from app.models.email_account import EmailAccount
 
 from app.services.mail_service import send_email
+from app.services.smtp_service import send_smtp_email
 
 import os
 
@@ -28,12 +29,14 @@ router = APIRouter(
 # REQUEST MODEL
 # =========================================================
 
+
 class CampaignCreate(BaseModel):
     name: str
     subject: str
     body: str
     contact_ids: list[int] = []
     sender_account_id: int | None = None
+    sender_account_type: str = "google"
 
 
 # =========================================================
@@ -52,35 +55,45 @@ async def create_new_campaign(
     # -----------------------------------------------------
 
     if campaign.sender_account_id is not None:
-
         sender_account = (
             db.query(EmailAccount)
             .filter(
-                EmailAccount.id
-                == campaign.sender_account_id,
-                EmailAccount.user_id
-                == current_user.id,
+                EmailAccount.id == campaign.sender_account_id,
+                EmailAccount.user_id == current_user.id,
             )
             .first()
         )
 
-        if not sender_account:
-            raise HTTPException(
-                status_code=404,
-                detail="Sender email account not found",
+    google_account = None
+
+    if not sender_account:
+        google_account = (
+            db.query(GoogleAccount)
+            .filter(
+                GoogleAccount.id == campaign.sender_account_id,
+                GoogleAccount.user_id == current_user.id,
             )
+            .first()
+        )
+
+    if not sender_account and not google_account:
+        raise HTTPException(
+            status_code=404,
+            detail="Sender email account not found",
+        )
 
     # -----------------------------------------------------
     # Create campaign
     # -----------------------------------------------------
 
     new_campaign = Campaign(
-        name=campaign.name,
-        subject=campaign.subject,
-        body=campaign.body,
-        sender_account_id=campaign.sender_account_id,
-        user_id=current_user.id,
-    )
+    name=campaign.name,
+    subject=campaign.subject,
+    body=campaign.body,
+    user_id=current_user.id,
+    sender_account_id=campaign.sender_account_id,
+    sender_account_type=campaign.sender_account_type,
+)
 
     db.add(new_campaign)
     db.commit()
@@ -217,90 +230,107 @@ async def send_campaign(
     # Get connected Google account
     # -----------------------------------------------------
 
-    google_account = (
-    db.query(GoogleAccount)
-    .filter(
-        GoogleAccount.user_id
-        == current_user.id
-    )
-    .first()
-)
+    
+    # -----------------------------------------------------
+    # Get the selected sender account
+    # -----------------------------------------------------
 
-    if not google_account:
+    google_account = None
+    sender_account = None
+
+    if campaign.sender_account_type == "google":
+        google_account = (
+            db.query(GoogleAccount)
+            .filter(
+                GoogleAccount.id == campaign.sender_account_id,
+                GoogleAccount.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not google_account:
+            raise HTTPException(
+                status_code=404,
+                detail="Selected Google sender account not found",
+            )
+
+    elif campaign.sender_account_type == "smtp":
+        sender_account = (
+            db.query(EmailAccount)
+            .filter(
+                EmailAccount.id == campaign.sender_account_id,
+                EmailAccount.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not sender_account:
+            raise HTTPException(
+                status_code=404,
+                detail="Selected SMTP sender account not found",
+            )
+
+    else:
         raise HTTPException(
             status_code=400,
-            detail="No Google account connected",
+            detail="Invalid sender account type",
         )
 
     sent = 0
     failed = 0
 
+
     # -----------------------------------------------------
     # Send to every contact
     # -----------------------------------------------------
 
+   
+    
     for contact in contacts:
-
         try:
+            if campaign.sender_account_type == "google":
+                send_email(
+                    access_token=google_account.access_token,
+                    refresh_token=google_account.refresh_token,
+                    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+                    recipient=contact.email,
+                    subject=campaign.subject,
+                    body=campaign.body,
+                )
 
-            send_email(
-                access_token=google_account.access_token,
-                refresh_token=google_account.refresh_token,
-                client_id=os.getenv(
-                    "GOOGLE_CLIENT_ID"
-                ),
-                client_secret=os.getenv(
-                    "GOOGLE_CLIENT_SECRET"
-                ),
-                recipient=contact.email,
-                subject=campaign.subject,
-                body=campaign.body,
-            )
-
-            # ---------------------------------------------
-            # SAVE SUCCESSFUL SEND
-            # ---------------------------------------------
+            elif campaign.sender_account_type == "smtp":
+                await send_smtp_email(
+                    smtp_host=sender_account.smtp_host,
+                    smtp_port=sender_account.smtp_port,
+                    username=sender_account.username,
+                    password=sender_account.password,
+                    recipient=contact.email,
+                    subject=campaign.subject,
+                    body=campaign.body,
+                    use_tls=sender_account.use_tls,
+                )
 
             history = CampaignHistory(
                 campaign_id=campaign.id,
                 contact_id=contact.id,
-                user_id=current_user.id,
-                recipient_email=contact.email,
                 status="sent",
                 error=None,
             )
-
             db.add(history)
-
             sent += 1
 
         except Exception as error:
-
-            print(
-                f"Failed to send email to "
-                f"{contact.email}: {error}"
-            )
-
-            # ---------------------------------------------
-            # SAVE FAILED SEND
-            # ---------------------------------------------
+            print(f"Failed to send email to {contact.email}: {error}")
 
             history = CampaignHistory(
                 campaign_id=campaign.id,
                 contact_id=contact.id,
-                user_id=current_user.id,
-                recipient_email=contact.email,
                 status="failed",
                 error=str(error),
             )
-
             db.add(history)
-
             failed += 1
-
-    # -----------------------------------------------------
-    # Save history
-    # -----------------------------------------------------
 
     db.commit()
 
@@ -309,6 +339,8 @@ async def send_campaign(
         "sent": sent,
         "failed": failed,
     }
+
+
 
 
 # =========================================================

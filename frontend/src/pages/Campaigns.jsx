@@ -10,6 +10,7 @@ export default function Campaigns() {
 
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [senderAccountId, setSenderAccountId] = useState("");
+  const [senderAccountType, setSenderAccountType] = useState("google");
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -104,6 +105,7 @@ export default function Campaigns() {
         body,
         contact_ids: selectedContacts,
         sender_account_id: Number(senderAccountId),
+        sender_account_type: senderAccountType,
       });
 
       setName("");
@@ -111,6 +113,7 @@ export default function Campaigns() {
       setBody("");
       setSelectedContacts([]);
       setSenderAccountId("");
+      setSenderAccountType("google");
 
       await loadData();
 
@@ -400,51 +403,44 @@ export default function Campaigns() {
 
               ) : (
 
-                <div className="flex gap-2">
+<div className="flex gap-2">
+  <select
+    value={
+      senderAccountId
+        ? `${senderAccountType}:${senderAccountId}`
+        : ""
+    }
+    onChange={(e) => {
+      const [type, id] = e.target.value.split(":");
+      setSenderAccountType(type || "google");
+      setSenderAccountId(id || "");
+    }}
+    className="flex-1 rounded-md border p-3"
+  >
+    <option value="">Select sender email</option>
 
-                  <select
-                    value={senderAccountId}
-                    onChange={(e) =>
-                      setSenderAccountId(e.target.value)
-                    }
-                    className="flex-1 rounded-md border p-3"
-                  >
+    {emailAccounts.map((account) => (
+      <option
+        key={`${account.account_type}:${account.id}`}
+        value={`${account.account_type}:${account.id}`}
+      >
+        {account.email} (
+        {account.account_type === "google"
+          ? "Google"
+          : account.provider || "SMTP"}
+        )
+      </option>
+    ))}
+  </select>
 
-                    <option value="">
-                      Select sender email
-                    </option>
-
-                    {emailAccounts.map((account) => (
-
-                      <option
-                        key={account.id}
-                        value={account.id}
-                      >
-                        {account.email}
-                        {account.provider
-                          ? ` (${account.provider})`
-                          : ""}
-                      </option>
-
-                    ))}
-
-                  </select>
-
-
-                  <button
-                    type="button"
-                    onClick={openAddAccount}
-                    className="whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50"
-                  >
-                    + Add Email
-                  </button>
-
-                </div>
-
-              )}
-
-            </div>
-
+  <button
+    type="button"
+    onClick={openAddAccount}
+    className="whitespace-nowrap rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50"
+  >
+    + Add Email
+  </button>
+</div>
 
             {/* ========================================= */}
             {/* RECIPIENTS */}
