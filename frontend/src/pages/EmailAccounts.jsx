@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 
@@ -10,7 +11,8 @@ export default function EmailAccounts() {
   const loadAccounts = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/email-accounts/`
+        `${API_URL}/email-accounts/`,
+        { withCredentials: true }
       );
 
       setAccounts(response.data);
@@ -28,23 +30,22 @@ export default function EmailAccounts() {
     loadAccounts();
   }, []);
 
-  // =====================================================
-  // REMOVE ACCOUNT
-  // =====================================================
-
-  const handleDelete = async (accountId, email) => {
+  const handleDelete = async (account) => {
     const confirmed = window.confirm(
-      `Are you sure you want to disconnect ${email}?`
+      `Are you sure you want to disconnect ${account.email}?`
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
-      await axios.delete(
-        `${API_URL}/email-accounts/${accountId}`
-      );
+      const endpoint =
+        account.account_type === "google"
+          ? `${API_URL}/email-accounts/google/${account.id}`
+          : `${API_URL}/email-accounts/${account.id}`;
+
+      await axios.delete(endpoint, {
+        withCredentials: true,
+      });
 
       await loadAccounts();
 
@@ -55,82 +56,49 @@ export default function EmailAccounts() {
         error
       );
 
-      const message =
+      alert(
         error.response?.data?.detail ||
-        "Failed to remove email account";
-
-      alert(message);
+          "Failed to remove email account"
+      );
     }
   };
 
-  // =====================================================
-  // PAGE
-  // =====================================================
-
   return (
     <div className="p-6">
-
-      {/* HEADER */}
-
       <div className="mb-6">
-
         <h1 className="text-2xl font-bold">
           Email Accounts
         </h1>
-
         <p className="mt-1 text-sm text-gray-500">
           Manage the email accounts connected to MailFlow.
         </p>
-
       </div>
 
-
-      {/* LOADING */}
-
       {loading ? (
-
         <div className="rounded-lg border p-8 text-center">
           <p className="text-gray-500">
             Loading email accounts...
           </p>
         </div>
-
       ) : accounts.length === 0 ? (
-
-        /* NO ACCOUNTS */
-
         <div className="rounded-lg border p-10 text-center">
-
           <h2 className="text-lg font-semibold">
             No email accounts connected
           </h2>
-
           <p className="mt-2 text-sm text-gray-500">
-            Add an email account from the Campaigns page
+            Connect a Google account or add an SMTP account
             to start sending campaigns.
           </p>
-
         </div>
-
       ) : (
-
-        /* ACCOUNT LIST */
-
         <div className="space-y-4">
-
           {accounts.map((account) => (
-
             <div
-              key={account.id}
+              key={`${account.account_type}-${account.id}`}
               className="flex items-center justify-between rounded-lg border p-5"
             >
-
-              {/* ACCOUNT INFORMATION */}
-
               <div>
-
                 <div className="flex items-center gap-3">
-
                   <h3 className="font-semibold">
                     {account.email}
                   </h3>
@@ -138,38 +106,23 @@ export default function EmailAccounts() {
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
                     {account.provider}
                   </span>
-
                 </div>
 
                 <p className="mt-1 text-sm text-green-600">
                   ● Connected
                 </p>
-
               </div>
 
-
-              {/* REMOVE BUTTON */}
-
               <button
-                onClick={() =>
-                  handleDelete(
-                    account.id,
-                    account.email
-                  )
-                }
+                onClick={() => handleDelete(account)}
                 className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
               >
                 Remove
               </button>
-
             </div>
-
           ))}
-
         </div>
-
       )}
-
     </div>
   );
 }

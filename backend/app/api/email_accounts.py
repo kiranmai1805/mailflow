@@ -13,7 +13,7 @@ from app.models.user import User
 from app.models.email_account import EmailAccount
 
 from app.services.smtp_service import send_smtp_email
-
+from app.models.google_account import GoogleAccount
 
 router = APIRouter(
     prefix="/email-accounts",
@@ -83,19 +83,22 @@ async def create_email_account(
 # LIST EMAIL ACCOUNTS
 # =========================================================
 
+
+
 @router.get("/")
 async def list_email_accounts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    accounts = (
+    smtp_accounts = (
         db.query(EmailAccount)
-        .filter(
-            EmailAccount.user_id == current_user.id
-        )
-        .order_by(
-            EmailAccount.id.desc()
-        )
+        .filter(EmailAccount.user_id == current_user.id)
+        .all()
+    )
+
+    google_accounts = (
+        db.query(GoogleAccount)
+        .filter(GoogleAccount.user_id == current_user.id)
         .all()
     )
 
@@ -104,11 +107,17 @@ async def list_email_accounts(
             "id": account.id,
             "email": account.email,
             "provider": account.provider,
-            "smtp_host": account.smtp_host,
-            "smtp_port": account.smtp_port,
-            "use_tls": account.use_tls,
+            "account_type": "smtp",
         }
-        for account in accounts
+        for account in smtp_accounts
+    ] + [
+        {
+            "id": account.id,
+            "email": account.email,
+            "provider": "Google",
+            "account_type": "google",
+        }
+        for account in google_accounts
     ]
 
 
@@ -199,5 +208,36 @@ async def delete_email_account(
 
     return {
         "message": "Email account removed successfully",
+        "email": email,
+    }
+
+
+@router.delete("/google/{account_id}")
+async def delete_google_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    account = (
+        db.query(GoogleAccount)
+        .filter(
+            GoogleAccount.id == account_id,
+            GoogleAccount.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="Google account not found",
+        )
+
+    email = account.email
+    db.delete(account)
+    db.commit()
+
+    return {
+        "message": "Google account disconnected successfully",
         "email": email,
     }
