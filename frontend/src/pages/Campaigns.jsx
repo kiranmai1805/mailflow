@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API_URL = "http://mailflow-gh75.onrender.com";
+const API_URL = "https://mailflow-gh75.onrender.com";
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);

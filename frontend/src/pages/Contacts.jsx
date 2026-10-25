@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Upload, FileSpreadsheet, Trash2, X } from "lucide-react";
 
-const API_URL = "http://mailflow-gh75.onrender.com";
+const API_URL = "https://mailflow-gh75.onrender.com";
 
 export default function Contacts() {
   const [contacts, setContacts] = useState([]);
