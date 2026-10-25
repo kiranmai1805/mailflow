@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-
 from app.api.dependencies import get_current_user
 
 from app.models.user import User
@@ -29,7 +28,6 @@ router = APIRouter(
 # REQUEST MODEL
 # =========================================================
 
-
 class CampaignCreate(BaseModel):
     name: str
     subject: str
@@ -49,32 +47,36 @@ async def create_new_campaign(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    # -----------------------------------------------------
-    # Verify sender account belongs to current user
-    # -----------------------------------------------------
-
-    if campaign.sender_account_id is not None:
-        sender_account = (
-            db.query(EmailAccount)
-            .filter(
-                EmailAccount.id == campaign.sender_account_id,
-                EmailAccount.user_id == current_user.id,
-            )
-            .first()
-        )
-
+    sender_account = None
     google_account = None
 
-    if not sender_account:
-        google_account = (
-            db.query(GoogleAccount)
-            .filter(
-                GoogleAccount.id == campaign.sender_account_id,
-                GoogleAccount.user_id == current_user.id,
+    # Verify the selected sender belongs to the current user.
+    if campaign.sender_account_id is not None:
+        if campaign.sender_account_type == "smtp":
+            sender_account = (
+                db.query(EmailAccount)
+                .filter(
+                    EmailAccount.id == campaign.sender_account_id,
+                    EmailAccount.user_id == current_user.id,
+                )
+                .first()
             )
-            .first()
-        )
+
+        elif campaign.sender_account_type == "google":
+            google_account = (
+                db.query(GoogleAccount)
+                .filter(
+                    GoogleAccount.id == campaign.sender_account_id,
+                    GoogleAccount.user_id == current_user.id,
+                )
+                .first()
+            )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid sender account type",
+            )
 
     if not sender_account and not google_account:
         raise HTTPException(
@@ -82,29 +84,22 @@ async def create_new_campaign(
             detail="Sender email account not found",
         )
 
-    # -----------------------------------------------------
-    # Create campaign
-    # -----------------------------------------------------
-
+    # Create campaign.
     new_campaign = Campaign(
-    name=campaign.name,
-    subject=campaign.subject,
-    body=campaign.body,
-    user_id=current_user.id,
-    sender_account_id=campaign.sender_account_id,
-    sender_account_type=campaign.sender_account_type,
-)
+        name=campaign.name,
+        subject=campaign.subject,
+        body=campaign.body,
+        user_id=current_user.id,
+        sender_account_id=campaign.sender_account_id,
+        sender_account_type=campaign.sender_account_type,
+    )
 
     db.add(new_campaign)
     db.commit()
     db.refresh(new_campaign)
 
-    # -----------------------------------------------------
-    # Add selected contacts
-    # -----------------------------------------------------
-
+    # Add selected contacts belonging to this user.
     for contact_id in campaign.contact_ids:
-
         contact = (
             db.query(Contact)
             .filter(
@@ -114,8 +109,6 @@ async def create_new_campaign(
             .first()
         )
 
-        # Ignore contacts that don't belong
-        # to the logged-in user
         if not contact:
             continue
 
@@ -144,15 +137,10 @@ async def list_campaigns(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     campaigns = (
         db.query(Campaign)
-        .filter(
-            Campaign.user_id == current_user.id
-        )
-        .order_by(
-            Campaign.id.desc()
-        )
+        .filter(Campaign.user_id == current_user.id)
+        .order_by(Campaign.id.desc())
         .all()
     )
 
@@ -163,6 +151,7 @@ async def list_campaigns(
             "subject": campaign.subject,
             "body": campaign.body,
             "sender_account_id": campaign.sender_account_id,
+            "sender_account_type": campaign.sender_account_type,
         }
         for campaign in campaigns
     ]
@@ -178,11 +167,7 @@ async def send_campaign(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    # -----------------------------------------------------
-    # Get campaign belonging to current user
-    # -----------------------------------------------------
-
+    # Get campaign belonging to the current user.
     campaign = (
         db.query(Campaign)
         .filter(
@@ -198,23 +183,16 @@ async def send_campaign(
             detail="Campaign not found",
         )
 
-    # -----------------------------------------------------
-    # Get contacts belonging to this campaign
-    # AND current user
-    # -----------------------------------------------------
-
+    # Get contacts selected for this campaign.
     contacts = (
         db.query(Contact)
         .join(
             campaign_contacts,
-            campaign_contacts.c.contact_id
-            == Contact.id,
+            campaign_contacts.c.contact_id == Contact.id,
         )
         .filter(
-            campaign_contacts.c.campaign_id
-            == campaign_id,
-            Contact.user_id
-            == current_user.id,
+            campaign_contacts.c.campaign_id == campaign_id,
+            Contact.user_id == current_user.id,
         )
         .all()
     )
@@ -226,15 +204,7 @@ async def send_campaign(
             "failed": 0,
         }
 
-    # -----------------------------------------------------
-    # Get connected Google account
-    # -----------------------------------------------------
-
-    
-    # -----------------------------------------------------
-    # Get the selected sender account
-    # -----------------------------------------------------
-
+    # Get the selected sender account.
     google_account = None
     sender_account = None
 
@@ -279,15 +249,12 @@ async def send_campaign(
     sent = 0
     failed = 0
 
-
-    # -----------------------------------------------------
-    # Send to every contact
-    # -----------------------------------------------------
-
-   
-    
+    # Send email to every selected contact.
     for contact in contacts:
         try:
+            if not contact.email:
+                raise ValueError("Contact has no recipient email address")
+
             if campaign.sender_account_type == "google":
                 send_email(
                     access_token=google_account.access_token,
@@ -311,36 +278,49 @@ async def send_campaign(
                     use_tls=sender_account.use_tls,
                 )
 
+            # Record successful delivery attempt.
             history = CampaignHistory(
                 campaign_id=campaign.id,
                 contact_id=contact.id,
+                user_id=current_user.id,
+                recipient_email=contact.email,
                 status="sent",
                 error=None,
             )
+
             db.add(history)
             sent += 1
 
         except Exception as error:
-            print(f"Failed to send email to {contact.email}: {error}")
+            print(
+                f"Failed to send email to {contact.email}: {error}"
+            )
 
+            # Record failed delivery attempt.
             history = CampaignHistory(
                 campaign_id=campaign.id,
                 contact_id=contact.id,
+                user_id=current_user.id,
+                recipient_email=contact.email,
                 status="failed",
                 error=str(error),
             )
+
             db.add(history)
             failed += 1
 
-    db.commit()
+    # Save all campaign history records.
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Campaign sending completed",
         "sent": sent,
         "failed": failed,
     }
-
-
 
 
 # =========================================================
@@ -353,11 +333,6 @@ async def delete_campaign(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    # -----------------------------------------------------
-    # Get campaign belonging to current user
-    # -----------------------------------------------------
-
     campaign = (
         db.query(Campaign)
         .filter(
@@ -373,40 +348,25 @@ async def delete_campaign(
             detail="Campaign not found",
         )
 
-    # -----------------------------------------------------
-    # 1. Delete campaign history FIRST
-    # -----------------------------------------------------
-
+    # Delete history first.
     db.query(CampaignHistory).filter(
-        CampaignHistory.campaign_id
-        == campaign_id,
-        CampaignHistory.user_id
-        == current_user.id,
-    ).delete(
-        synchronize_session=False
-    )
+        CampaignHistory.campaign_id == campaign_id,
+        CampaignHistory.user_id == current_user.id,
+    ).delete(synchronize_session=False)
 
     db.flush()
 
-    # -----------------------------------------------------
-    # 2. Delete campaign-recipient relationships
-    # -----------------------------------------------------
-
+    # Delete campaign-recipient relationships.
     db.execute(
         campaign_contacts.delete().where(
-            campaign_contacts.c.campaign_id
-            == campaign_id
+            campaign_contacts.c.campaign_id == campaign_id
         )
     )
 
     db.flush()
 
-    # -----------------------------------------------------
-    # 3. Delete campaign itself
-    # -----------------------------------------------------
-
+    # Delete the campaign.
     db.delete(campaign)
-
     db.commit()
 
     return {
@@ -424,16 +384,12 @@ async def get_campaign_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     history = (
         db.query(CampaignHistory)
         .filter(
-            CampaignHistory.user_id
-            == current_user.id
+            CampaignHistory.user_id == current_user.id
         )
-        .order_by(
-            CampaignHistory.sent_at.desc()
-        )
+        .order_by(CampaignHistory.sent_at.desc())
         .all()
     )
 
@@ -460,88 +416,54 @@ async def get_campaign_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    # -----------------------------------------------------
-    # Total successful emails
-    # -----------------------------------------------------
-
+    # Total successful emails.
     total_sent = (
         db.query(CampaignHistory)
         .filter(
-            CampaignHistory.user_id
-            == current_user.id,
-            CampaignHistory.status
-            == "sent",
+            CampaignHistory.user_id == current_user.id,
+            CampaignHistory.status == "sent",
         )
         .count()
     )
 
-    # -----------------------------------------------------
-    # Total failed emails
-    # -----------------------------------------------------
-
+    # Total failed emails.
     total_failed = (
         db.query(CampaignHistory)
         .filter(
-            CampaignHistory.user_id
-            == current_user.id,
-            CampaignHistory.status
-            == "failed",
+            CampaignHistory.user_id == current_user.id,
+            CampaignHistory.status == "failed",
         )
         .count()
     )
 
-    # -----------------------------------------------------
-    # Total attempted
-    # -----------------------------------------------------
-
+    # Total attempts.
     total_attempted = (
         db.query(CampaignHistory)
         .filter(
-            CampaignHistory.user_id
-            == current_user.id
+            CampaignHistory.user_id == current_user.id
         )
         .count()
     )
 
-    # -----------------------------------------------------
-    # Total campaigns
-    # -----------------------------------------------------
-
+    # Total campaigns.
     total_campaigns = (
         db.query(Campaign)
-        .filter(
-            Campaign.user_id
-            == current_user.id
-        )
+        .filter(Campaign.user_id == current_user.id)
         .count()
     )
 
-    # -----------------------------------------------------
-    # Total contacts
-    # -----------------------------------------------------
-
+    # Total contacts.
     total_contacts = (
         db.query(Contact)
-        .filter(
-            Contact.user_id
-            == current_user.id
-        )
+        .filter(Contact.user_id == current_user.id)
         .count()
     )
-
-    # -----------------------------------------------------
-    # Success rate
-    # -----------------------------------------------------
 
     success_rate = 0
 
     if total_attempted > 0:
         success_rate = round(
-            (
-                total_sent
-                / total_attempted
-            ) * 100,
+            (total_sent / total_attempted) * 100,
             2,
         )
 
