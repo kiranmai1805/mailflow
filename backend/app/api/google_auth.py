@@ -316,13 +316,7 @@ async def google_callback(
         None,
     )
 
-    return {
-        "message":
-            "Google account connected successfully",
-
-        "email":
-            email,
-
-        "user_id":
-            current_user.id,
-    }
+    return RedirectResponse(
+    url=f"{os.getenv('FRONTEND_URL', 'https://mailflow-frontend-one.vercel.app')}/email-accounts?google_connected=true",
+    status_code=303,
+)
